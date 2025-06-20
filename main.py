@@ -4,7 +4,6 @@ import bisect
 
 app = FastAPI()
 
-# Tabla más precisa basada en comportamiento físico estimado
 saturation_points = [
     (0.05, 0.001050, 30.000000),
     (0.1,  0.001080, 20.000000),
@@ -18,11 +17,11 @@ saturation_points = [
     (7.0,  0.003200, 3.200000),
     (8.0,  0.003350, 2.100000),
     (9.0,  0.003450, 1.100000),
-    (10.0, 0.003500, 0.003500)  # Punto crítico
+    (10.0, 0.003500, 0.003500)
 ]
 
 pressures = [p[0] for p in saturation_points]
-vf_crit = vg_crit = 0.0035
+vf_crit = vg_crit = "0.003500"
 
 @app.get("/phase-change-diagram")
 def get_data(pressure: float):
@@ -30,7 +29,6 @@ def get_data(pressure: float):
 
     if pressure >= 10.0:
         print("⚠️ Presión igual o mayor al punto crítico. Devolviendo valores críticos.")
-        print(f"✅ vf = {vf_crit}, vg = {vg_crit}")
         return {
             "specific_volume_liquid": vf_crit,
             "specific_volume_vapor": vg_crit
@@ -39,14 +37,13 @@ def get_data(pressure: float):
     for p, vf, vg in saturation_points:
         if pressure == p:
             print("✅ Valor exacto encontrado en tabla.")
-            print(f"➡️ vf = {vf}, vg = {vg}")
             return {
-                "specific_volume_liquid": vf,
-                "specific_volume_vapor": vg
+                "specific_volume_liquid": f"{vf:.6f}",
+                "specific_volume_vapor": f"{vg:.6f}"
             }
 
     if pressure < pressures[0]:
-        print("❌ Presión fuera de rango. Rechazada.")
+        print("❌ Presión fuera de rango.")
         return JSONResponse(
             status_code=400,
             content={"error": "Presión fuera de rango (mínimo 0.05 MPa)"}
@@ -56,11 +53,14 @@ def get_data(pressure: float):
     p1, vf1, vg1 = saturation_points[idx - 1]
     p2, vf2, vg2 = saturation_points[idx]
 
-    def interp(x, x1, x2, y1, y2):
-        return y1 + (y2 - y1) * (x - x1) / (x2 - x1)
+    # Cálculo de interpolación con precisión fija
+    def interpolate(p, p1, p2, y1, y2):
+        proportion = (p - p1) / (p2 - p1)
+        interpolated = y1 + proportion * (y2 - y1)
+        return f"{interpolated:.6f}"
 
-    vf = float("{:.6f}".format(interp(pressure, p1, p2, vf1, vf2)))
-    vg = float("{:.6f}".format(interp(pressure, p1, p2, vg1, vg2)))
+    vf = interpolate(pressure, p1, p2, vf1, vf2)
+    vg = interpolate(pressure, p1, p2, vg1, vg2)
 
     print("🔄 Interpolación realizada entre:")
     print(f"   P1 = {p1} MPa → vf1 = {vf1}, vg1 = {vg1}")
